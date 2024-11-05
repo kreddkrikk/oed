@@ -5,7 +5,7 @@ import logging
 import oeda
 import os
 import re
-import textwrap
+import subprocess
 import zlib
 from html.parser import HTMLParser
 
@@ -22,26 +22,29 @@ class color:
    END = '\033[0m'
 
 class MyHTMLParser(HTMLParser):
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.text = ''
+
     def handle_starttag(self, tag, attrs):
-        if tag == 'br': print()
-        elif tag == 'hw': print(color.BOLD, end='')
-        elif tag == 'xr': print(color.BLUE, end='')
-        elif tag == 'upd': print(color.RED, end='')
-        elif tag == 'd': print(color.MAGENTA + color.BOLD, end='')
-        #else: print('<' + tag + '>')
+        if tag == 'br': self.text += '\n'
+        elif tag == 'hw': self.text += color.BOLD
+        elif tag == 'xr': self.text += color.BLUE
+        elif tag == 'upd': self.text += color.RED
+        elif tag == 'd': self.text += color.MAGENTA + color.BOLD
+        #else: self.text += '<' + tag + '>')
         
     def handle_endtag(self, tag):
-        if tag == 'hw': print(color.END, end='')
-        elif tag == 'xr': print(color.END, end='')
-        elif tag == 'upd': print(color.END, end='')
-        elif tag == 'e': print(end='\n\n')
-        elif tag == 'sube': print(end='\n\n')
-        elif tag == 'd': print(color.END, end='')
-        #else: print('</' + tag + '>')
+        if tag == 'hw': self.text += color.END
+        elif tag == 'xr': self.text += color.END
+        elif tag == 'upd': self.text += color.END
+        elif tag == 'e': self.text += '\n\n'
+        elif tag == 'sube': self.text += '\n\n'
+        elif tag == 'd': self.text += color.END
+        #else: self.text += '</' + tag + '>')
         
     def handle_data(self, data):
-        #data = textwrap.fill(data, 80)
-        print(data, end='')
+        self.text += data
 
 def decompress_block(infile, offsets, index, fix_zlib=False):
     infile.seek(offsets[index])
@@ -55,17 +58,13 @@ def decompress_block(infile, offsets, index, fix_zlib=False):
     return bytearray(zlib.decompress(comp_data))
 
 # Get query from arguments
-def init_query():
-    parser = argparse.ArgumentParser(
-            description='Search for a word in the Oxford English Dictionary')
-    parser.add_argument('query', metavar='query', help='word to search for')
-    parser.add_argument('--log', dest='loglevel', help='set the logging level') 
-    args = parser.parse_args()
-    query = args.query
-    loglevel = args.loglevel
-    if loglevel:
-        numlevel = getattr(logging, loglevel.upper())
-        logging.basicConfig(level=numlevel)
+def get_query():
+    try:
+        query = input('Enter search term: ')
+    except:
+        print()
+        exit(1)
+    print()
     return query
 
 # Initialize entry list
@@ -81,16 +80,22 @@ def get_entries(filename, separator):
     return entries
 
 def get_selected_entry(entries):
-    selected = input('\nPlease select an entry: ')
+    try:
+        selected = input('Please select an entry: ')
+    except:
+        print('\n')
+        return -1
     if not selected:
-        exit(1)
+        print('No entry selected\n')
+        return None
     if not selected.isnumeric():
-        print(f'\'{selected}\' is not a number')
+        print(f'\'{selected}\' is not a number\n')
         return None
     index = int(selected)
     if index > len(entries) or index < 1:
-        print(f'\'{short_index}\' is out of range')
+        print(f'\'{index}\' is out of range\n')
         return None
+    print()
     return entries[index - 1][0]
 
 # Find index of entry
@@ -107,20 +112,21 @@ def find_entry_index(entries, query):
                 results.append((i, result))
         elif entry_index:
             break
+    text = ''
     parser = MyHTMLParser()
     if len(results) > 1:
         print(f'Found multiple entries matching \'{query}\':\n')
         for i in range(0, len(results)):
             result = results[i]
-            print(f'{i+1:d}. ', end='')
-            parser.feed(result[1])
-            print()
+            text += f'{i+1:d}. {result[1]}\n'
+        parser.feed(text)
+        parser.close()
+        print(parser.text)
         while not entry_index:
             entry_index = get_selected_entry(results)
-        print()
     elif len(results) > 0:
         entry_index = results[0][0]
-    if entry_index:
+    if entry_index and entry_index > 0:
         logging.info('%s is entry number %d' % (query, entry_index))
     return entry_index
 
@@ -154,25 +160,89 @@ def get_definition(blk_str, entry_blk_index):
     definition = definition.replace('\\\'', '\'')
     return definition
 
+# Ignore color tags when calculating line length
+def fold(text, width):
+    output = ''
+    text = text.replace('\u00A0', ' ')
+    text = re.sub(r' {3,}', r'  ', text)
+    for line in text.split('\n'):
+        column = 0
+        for word in line.split(' '):
+            length = len(word)
+            for i in range(len(word)):
+                # Exclude color tag from length
+                if word[i] == '\x1b':
+                    while word[i] != 'm':
+                        length -= 1
+                        i += 1
+                    length -= 1
+            column += length + 1 # Include space
+            if column > width:
+                column = length + 1 # Include space
+                output += '\n' # Wrap the text!
+            output += word + ' '
+        output += '\n'
+    return output
+
 def main():
-    query = init_query()
-    entries = get_entries('hw.t', '^')
-    entry_index = find_entry_index(entries, query)
-    # Look in ky.t
-    if not entry_index:
-        entries = get_entries('ky.t', '#')
+    parser = argparse.ArgumentParser(
+        description='Search for a word in the Oxford English Dictionary')
+    parser.add_argument('-i',  '--interactive', action='store_true', help='interactive mode')
+    parser.add_argument('-w', '--width', type=int, help='wrap to column width (default: 80)')
+    parser.add_argument('query', metavar='query', nargs='?', default=None, help='word to search for')
+    parser.add_argument('--log', dest='loglevel', help='set the logging level')
+    args = parser.parse_args()
+    interactive = args.interactive
+    loglevel = args.loglevel
+    query = args.query
+    width = args.width
+    print('Oxford English Dictionary 2nd ed. on CD-ROM (v4.0)')
+    print('Copyright © 2009 Oxford University Press\n')
+    if interactive:
+        print('Running in interactive mode. Use Ctrl-C to quit.\n')
+    else:
+        print('Running in default mode. Use Ctrl-C to quit.\n')
+    while True:
+        if not query:
+            query = get_query()
+        entries = get_entries('hw.t', '^')
         entry_index = find_entry_index(entries, query)
-    if not entry_index:
-        print(f'Search for {query} returned no results')
-        exit(0)
-    blk_index = find_block_index(entry_index, query)
-    entry_blk_index = entry_index - oeda.oednum[blk_index]
-    logging.info('%s is at index %d in block %d' % (query, entry_blk_index, 
-        blk_index))
-    blk_str = get_block_string('oed.t', oeda.oedlen, blk_index)
-    definition = get_definition(blk_str, entry_blk_index)
-    parser = MyHTMLParser()
-    parser.feed(definition)
+        if entry_index == -1:
+            query = None
+            continue
+        # Look in ky.t
+        if not entry_index:
+            entries = get_entries('ky.t', '#')
+            entry_index = find_entry_index(entries, query)
+        if not entry_index:
+            print(f'Search for {query} returned no results\n')
+            query = None
+            continue
+        blk_index = find_block_index(entry_index, query)
+        entry_blk_index = entry_index - oeda.oednum[blk_index]
+        logging.info('%s is at index %d in block %d' % (query, entry_blk_index, 
+            blk_index))
+        blk_str = get_block_string('oed.t', oeda.oedlen, blk_index)
+        definition = get_definition(blk_str, entry_blk_index)
+        parser = MyHTMLParser()
+        parser.feed(definition)
+        parser.close()
+        if width:
+            text = fold(parser.text, width) if width else parser.text
+        else:
+            text = parser.text
+        if interactive:
+            process = subprocess.Popen(['less', '-r'], stdin=subprocess.PIPE)
+            try:
+                process.stdin.write(bytes(text, 'utf-8'))
+                process.communicate()
+            except IOError as e:
+                pass
+        else:
+            print(text)
+            break
+        query = None
+
 
 if __name__ == '__main__':
     main()

@@ -10,12 +10,12 @@ Put `oed.py` and `oeda.py` into the root directory of the dictionary and run the
 ./oed.py [entry]
 ```
 
-Where [entry] is the search query. For multiple search results the desired entry can be selected from a list.
+Where [entry] is the search query. Use `-i` for interactive mode and `-w` to set the output column width (recommended if using interactive mode).
 
 #  More info
 
-Dictionary entries are contained in Zlib-compressed blocks (1066 total) in the 196MB file `oed.t`. The Zlib magic (78 DA) at the start of each block has been overwritten with a random 16-bit value. Blocks are located at fixed offsets defined as integer constants in the Neko bytecode file `app.n`. These were discovered in a bytecode dump of `app.n` using the [Neko Compiler](https://nekovm.org/doc/tools/) `nekoc` and copied to `oeda.py`.
+Dictionary entries are contained in Zlib-compressed blocks (1066 total) in the 196MB file `oed.t`. Blocks are located at fixed offsets defined as integer constants in the Neko bytecode file `app.n`. The Zlib magic (78 DA) at the start of each block was originally overwritten with a random 16-bit value. This and the offsets were discovered in a bytecode dump of `app.n` using the [Neko Compiler](https://nekovm.org/doc/tools/) `nekoc`.
 
 ## Entities
 
-Entites, HTML-based representations of non-ASCII symbols, are defined in the script file `EntityMapper.as` compiled into the Flash executable `OED.swf`. The script file was extracted from the Flash executable using the [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler) and the entities copied to `oeda.py`.
+Entites, HTML-based representations of non-ASCII symbols, are defined in the script file `EntityMapper.as` compiled into the Flash executable `OED.swf`. The script file was extracted from the Flash executable using the [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler) and the entities were copied to `oeda.py`.

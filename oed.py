@@ -168,17 +168,20 @@ def fold(text, width):
     for line in text.split('\n'):
         column = 0
         for word in line.split(' '):
-            length = len(word)
-            for i in range(len(word)):
+            vlen = len(word) # Visible length (excluding color tags)
+            blen = vlen # Byte length (including color tags)
+            i = 0
+            while i < blen:
                 # Exclude color tag from length
                 if word[i] == '\x1b':
-                    while word[i] != 'm':
-                        length -= 1
+                    while i < blen and word[i] != 'm':
+                        vlen -= 1
                         i += 1
-                    length -= 1
-            column += length + 1 # Include space
+                    vlen -= 1
+                i += 1
+            column += vlen + 1 # Include space
             if column > width:
-                column = length + 1 # Include space
+                column = vlen + 1 # Include space
                 output += '\n' # Wrap the text!
             output += word + ' '
         output += '\n'

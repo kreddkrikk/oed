@@ -96,7 +96,7 @@ class OedSearch():
         if not entry_index:
             entries = self.get_entries(self.ky_path, '#')
             results = self.find_entries(entries, query)
-            entry_index = self.find_entries(results, query)
+            entry_index = self.get_entry_index(results, query)
         if not entry_index:
             print(f'Search for {query} returned no results\n')
             return False

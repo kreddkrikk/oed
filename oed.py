@@ -54,14 +54,14 @@ class OedSearch():
         self.oed_path = self.get_realpath('oed.t')
         self.interactive = args.interactive
         self.width = args.width
-        loglevel = args.loglevel
+        debug = args.debug
         query = args.query
         print('Oxford English Dictionary 2nd ed. on CD-ROM (v4.0)')
         print('Copyright © 2009 Oxford University Press\n')
-        if self.interactive:
-            print('Running in interactive mode. Use Ctrl-C to quit, Ctrl-D to return.\n')
-        else:
-            print('Running in default mode. Use Ctrl-C to quit, Ctrl-D to return.\n')
+        mode = 'interactive' if self.interactive else 'default'
+        print(f'Running in {mode} mode. Use Ctrl-C to quit, Ctrl-D to return.\n')
+        if debug:
+            logging.basicConfig(level=logging.INFO)
         while True:
             if not query:
                 query = self.get_query()
@@ -89,23 +89,26 @@ class OedSearch():
 
     # Returns True if single entry selected from multiple results
     def parse_results(self, results, query):
-        entry_index = self.get_entry_index(results, query)
-        if entry_index == -1:
+        entry_indexes = self.get_entry_indexes(results, query)
+        if entry_indexes == -1:
             return False
         # Look in ky.t
-        if not entry_index:
+        if entry_indexes is None:
             entries = self.get_entries(self.ky_path, '#')
             results = self.find_entries(entries, query)
-            entry_index = self.get_entry_index(results, query)
-        if not entry_index:
+            entry_indexes = self.get_entry_indexes(results, query)
+        if entry_indexes is None:
             print(f'Search for {query} returned no results\n')
             return False
-        blk_index = self.find_block_index(entry_index, query)
-        entry_blk_index = entry_index - oeda.oednum[blk_index]
-        logging.info('%s is at index %d in block %d' % (query, entry_blk_index, 
-            blk_index))
-        blk_str = self.get_block_string(self.oed_path, oeda.oedlen, blk_index)
-        definition = self.get_definition(blk_str, entry_blk_index)
+        definition = ''
+        for entry_index in entry_indexes:
+            blk_index = self.find_block_index(entry_index, query)
+            entry_blk_index = entry_index - oeda.oednum[blk_index]
+            logging.info('%s is at index %d in block %d' % (
+                query, entry_blk_index, blk_index))
+            blk_str = self.get_block_string(
+                    self.oed_path, oeda.oedlen, blk_index)
+            definition += self.get_definition(blk_str, entry_blk_index)
         parser = MyHTMLParser()
         parser.feed(definition)
         parser.close()
@@ -149,9 +152,9 @@ class OedSearch():
             entries = s.split(separator)
         return entries
 
-    def get_selected_entry(self, entries):
+    def get_selected_entries(self, entries):
         try:
-            selected = input('Please select an entry: ')
+            selected = input('Please select an entry (none for all): ')
         except KeyboardInterrupt:
             print('\n')
             exit(1)
@@ -159,8 +162,9 @@ class OedSearch():
             print('\n')
             return -1
         if not selected:
-            print('No entry selected\n')
-            return None
+            # Select all entries
+            print()
+            return [(index) for index, query in entries]
         if not selected.isnumeric():
             print(f'\'{selected}\' is not a number\n')
             return None
@@ -168,8 +172,9 @@ class OedSearch():
         if index > len(entries) or index < 1:
             print(f'\'{index}\' is out of range\n')
             return None
+        # Select single entry
         print()
-        return entries[index - 1][0]
+        return [entries[index - 1][0]]
 
     # Search for query in all entries
     def find_entries(self, entries, query):
@@ -184,9 +189,9 @@ class OedSearch():
                     results.append((i, result))
         return results
 
-    def get_entry_index(self, results, query):
+    def get_entry_indexes(self, results, query):
         text = ''
-        entry_index = None
+        entry_indexes = None
         parser = MyHTMLParser()
         if len(results) > 1:
             for i in range(0, len(results)):
@@ -195,13 +200,19 @@ class OedSearch():
             parser.feed(text)
             parser.close()
             print(parser.text)
-            while not entry_index:
-                entry_index = self.get_selected_entry(results)
+            while entry_indexes is None:
+                entry_indexes = self.get_selected_entries(results)
         elif len(results) > 0:
-            entry_index = results[0][0]
-        if entry_index and entry_index > 0:
-            logging.info('%s is entry number %d' % (query, entry_index))
-        return entry_index
+            entry_indexes = [results[0][0]]
+        if entry_indexes is None:
+            logging.info('Selected entry is invalid')
+        elif entry_indexes == -1:
+            logging.info('Return to query search')
+        elif len(entry_indexes) == 1:
+            logging.info('%s is entry number %d' % (query, entry_indexes[0]))
+        elif len(entry_indexes) > 1:
+            logging.info('Selected multiple entries')
+        return entry_indexes
 
     # Find index of block containing entry contents
     def find_block_index(self, entry_index, query):
@@ -269,8 +280,8 @@ def main():
         description='Search for a word in the Oxford English Dictionary')
     parser.add_argument('-i',  '--interactive', action='store_true', help='interactive mode')
     parser.add_argument('-w', '--width', type=int, help='wrap to column width (default: 80)')
+    parser.add_argument('-d', '--debug', action='store_true', help='debug mode')
     parser.add_argument('query', metavar='query', nargs='?', default=None, help='word to search for')
-    parser.add_argument('--log', dest='loglevel', help='set the logging level')
     args = parser.parse_args()
     oed_search = OedSearch(args)
 

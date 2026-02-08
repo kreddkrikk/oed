@@ -29,7 +29,7 @@ class MyHTMLParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if tag == 'br': self.text += '\n'
-        elif tag == 'hw': self.text += color.BOLD
+        elif tag == 'hw': self.text += color.GREEN + color.BOLD
         elif tag == 'xr': self.text += color.BLUE
         elif tag == 'upd': self.text += color.RED
         elif tag == 'd': self.text += color.MAGENTA + color.BOLD

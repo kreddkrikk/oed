@@ -5,6 +5,7 @@ import logging
 import oeda
 import os
 import re
+import readline
 import shutil
 import subprocess
 import zlib

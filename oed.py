@@ -53,13 +53,13 @@ class OedSearch():
         self.hw_path = self.get_realpath('hw.t')
         self.ky_path = self.get_realpath('ky.t')
         self.oed_path = self.get_realpath('oed.t')
-        self.interactive = args.interactive
+        self.print_only = args.print
         self.width = args.width
         debug = args.debug
         query = args.query
         print('Oxford English Dictionary 2nd ed. on CD-ROM (v4.0)')
         print('Copyright © 2009 Oxford University Press\n')
-        mode = 'interactive' if self.interactive else 'default'
+        mode = 'print_only' if self.print_only else 'default'
         print(f'Running in {mode} mode. Use Ctrl-C to quit, Ctrl-D to return.\n')
         if debug:
             logging.basicConfig(level=logging.INFO)
@@ -73,7 +73,7 @@ class OedSearch():
             # Loop to return to multiple entry selection
             while self.parse_results(results, query):
                 pass
-            if not self.interactive:
+            if self.print_only:
                 break
             query = None
 
@@ -113,13 +113,14 @@ class OedSearch():
         parser = MyHTMLParser()
         parser.feed(definition)
         parser.close()
-        # Non-wrapped text may have scrolling issues in interactive mode, so
+        # Non-wrapped text may have scrolling issues in print_only mode, so
         # an explicit width is necessary.
-        terminal_size = shutil.get_terminal_size((80, 50))
-        if self.interactive and not self.width:
-            self.width = terminal_size.columns - 10
-        text = self.fold(parser.text, self.width) if self.width else parser.text
-        if self.interactive:
+        width = self.width
+        if not self.print_only and not width:
+            terminal_size = shutil.get_terminal_size((80, 50))
+            width = terminal_size.columns - 10
+        text = self.fold(parser.text, width) if width else parser.text
+        if not self.print_only:
             process = subprocess.Popen(['less', '-r'], stdin=subprocess.PIPE)
             try:
                 process.stdin.write(bytes(text, 'utf-8'))
@@ -279,7 +280,7 @@ class OedSearch():
 def main():
     parser = argparse.ArgumentParser(
         description='Search for a word in the Oxford English Dictionary')
-    parser.add_argument('-i',  '--interactive', action='store_true', help='interactive mode')
+    parser.add_argument('-p',  '--print', action='store_true', help='print definition(s) then exit')
     parser.add_argument('-w', '--width', type=int, help='wrap to column width (default: 80)')
     parser.add_argument('-d', '--debug', action='store_true', help='debug mode')
     parser.add_argument('query', metavar='query', nargs='?', default=None, help='word to search for')

@@ -10,7 +10,7 @@ Put `oed.py` and `oeda.py` into the root directory of the dictionary and run the
 ./oed.py [entry]
 ```
 
-Where [entry] is the search query. Use `-i` for interactive mode and `-w` to set the output column width (recommended if using interactive mode).
+Where [entry] is the search query. Use `-h` for a list of all options.
 
 #  More info
 
